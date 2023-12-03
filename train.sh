@@ -1,11 +1,11 @@
 
 # export CUDA_VISIBLE_DEVICES=0,1
 
-train_count=1
+train_count=3
 train_index=0
-agent='rnn'
-mixers='vdn'
-maps='1c3s5z'
+agent='iqn_rnn'
+mixers='ddn'
+maps='8m_vs_9m 10m_vs_11m 25m'
 gpu_id=0
 
 ### 1c3s5z 2s3z 3m 8m 3s_vs_3z 
