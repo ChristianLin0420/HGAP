@@ -3,9 +3,9 @@
 
 train_count=3
 train_index=0
-agent='iqn_rnn'
-mixers='ddn'
-maps='8m_vs_9m 10m_vs_11m 25m'
+agent='diffusion_rnn'
+mixers='dfmix'
+maps='1c3s5z 2s3z 3m 8m 3s_vs_3z'
 gpu_id=0
 
 ### 1c3s5z 2s3z 3m 8m 3s_vs_3z 
