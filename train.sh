@@ -1,11 +1,11 @@
 
-# export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=0,1
 
-train_count=3
+train_count=1
 train_index=0
 agent='diffusion_rnn'
 mixers='dfmix'
-maps='1c3s5z 2s3z 3m 8m 3s_vs_3z'
+maps='5m_vs_6m'
 gpu_id=0
 
 ### 1c3s5z 2s3z 3m 8m 3s_vs_3z 

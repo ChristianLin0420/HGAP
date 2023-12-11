@@ -1,3 +1,4 @@
+import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -11,7 +12,7 @@ class DiffusionRNNAgent(nn.Module):
         self.args = args
         self.beta_schedule = 'cosine'
         self.n_timesteps = 10
-        self.max_action = 1.0
+        self.max_action = 10.0
 
         self.fc1 = nn.Linear(input_shape, args.rnn_hidden_dim)
         self.rnn = nn.GRUCell(args.rnn_hidden_dim, args.rnn_hidden_dim)
@@ -19,7 +20,7 @@ class DiffusionRNNAgent(nn.Module):
         self.model = MLP(state_dim=args.rnn_hidden_dim, action_dim=args.n_actions, device=args.device)
 
         self.actor = Diffusion(state_dim=args.rnn_hidden_dim, action_dim=args.n_actions, model=self.model, max_action=self.max_action,
-                               beta_schedule=self.beta_schedule, n_timesteps=self.n_timesteps,).to(args.device)
+                               beta_schedule=self.beta_schedule, n_timesteps=self.n_timesteps, predict_epsilon=False).to(args.device)
 
         self.fc2 = nn.Linear(args.rnn_hidden_dim, args.n_actions)
 
@@ -37,3 +38,15 @@ class DiffusionRNNAgent(nn.Module):
 
         # q = self.fc2(h)
         return q, h, q_log, nonezero_mask, noise
+    
+    def get_bc_loss(self, inputs, actions, hidden_state):
+        x = F.relu(self.fc1(inputs))
+        h_in = hidden_state.reshape(-1, self.args.rnn_hidden_dim)
+        h = self.rnn(x, h_in)
+
+        # computing the loss
+        actions = actions.type(th.float32)
+        loss = self.actor.loss(actions, h)
+
+        return loss
+        

@@ -22,20 +22,28 @@ class BasicMAC:
         if self.args.agent == "iqn_rnn":
             agent_outputs, rnd_quantiles = self.forward(ep_batch, t_ep, forward_type="approx")
         elif self.args.agent == "diffusion_rnn":
-            agent_outputs, q_log, nonezero_mask, noise = self.forward(ep_batch, t_ep)
+            if self.args.use_bc_loss:
+                agent_outputs, q_log, nonezero_mask, noise, bc_losses = self.forward(ep_batch, t_ep)
+            else:
+                agent_outputs, q_log, nonezero_mask, noise = self.forward(ep_batch, t_ep)
         else:
             agent_outputs = self.forward(ep_batch, t_ep, forward_type=test_mode)
         if self.args.agent in ["iqn_rnn", "diffusion_rnn"]:
             agent_outputs = agent_outputs.view(ep_batch.batch_size, self.n_agents, self.args.n_actions, -1).mean(dim=3)
         chosen_actions = self.action_selector.select_action(agent_outputs[bs], avail_actions[bs], t_env, test_mode=test_mode)
+
+        if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
+            return chosen_actions, agent_outputs
         return chosen_actions
 
     def forward(self, ep_batch, t, forward_type=None):
-        agent_inputs = self._build_inputs(ep_batch, t)
+        agent_inputs, action_inputs = self._build_inputs(ep_batch, t)
         avail_actions = ep_batch["avail_actions"][:, t]
+
         if self.args.agent == "iqn_rnn":
             agent_outs, self.hidden_states, rnd_quantiles = self.agent(agent_inputs, self.hidden_states, forward_type=forward_type)
         elif self.args.agent == "diffusion_rnn":
+            bc_losses = self.agent.get_bc_loss(agent_inputs, action_inputs, self.hidden_states)
             agent_outs, self.hidden_states, q_log, nonezero_mask, noise = self.agent(agent_inputs, self.hidden_states)
         else:
             agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
@@ -65,6 +73,8 @@ class BasicMAC:
         if self.args.agent == "iqn_rnn":
             return agent_outs, rnd_quantiles
         elif self.args.agent == "diffusion_rnn":
+            if self.args.use_bc_loss:
+                return agent_outs, q_log, nonezero_mask, noise, bc_losses
             return agent_outs, q_log, nonezero_mask, noise
         else:
             return agent_outs.view(ep_batch.batch_size, self.n_agents, -1)
@@ -95,7 +105,9 @@ class BasicMAC:
         # Other MACs might want to e.g. delegate building inputs to each agent
         bs = batch.batch_size
         inputs = []
+        action_inputs = []        
         inputs.append(batch["obs"][:, t])  # b1av
+        action_inputs.append(batch["q_actions"][:, t])  # b1av
         if self.args.obs_last_action:
             if t == 0:
                 inputs.append(th.zeros_like(batch["actions_onehot"][:, t]))
@@ -105,7 +117,8 @@ class BasicMAC:
             inputs.append(th.eye(self.n_agents, device=batch.device).unsqueeze(0).expand(bs, -1, -1))
 
         inputs = th.cat([x.reshape(bs*self.n_agents, -1) for x in inputs], dim=1)
-        return inputs
+        action_inputs = th.cat([x.reshape(bs*self.n_agents, -1) for x in action_inputs], dim=1)
+        return inputs, action_inputs
 
     def _get_input_shape(self, scheme):
         input_shape = scheme["obs"]["vshape"]

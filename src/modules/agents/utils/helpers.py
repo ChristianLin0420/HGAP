@@ -77,7 +77,7 @@ class WeightedLoss(nn.Module):
             pred, targ : tensor [ batch_size x action_dim ]
         '''
         loss = self._loss(pred, targ)
-        weighted_loss = (loss * weights).mean()
+        weighted_loss = (loss * weights).mean(-1, keepdim=True)
         return weighted_loss
 
 class WeightedL1(WeightedLoss):

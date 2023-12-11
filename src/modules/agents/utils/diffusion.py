@@ -174,6 +174,7 @@ class Diffusion(nn.Module):
         noise = torch.randn_like(x_start)
 
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
+        t = t.unsqueeze(-1).float()
 
         x_recon = self.model(x_noisy, t, state)
 
@@ -183,13 +184,11 @@ class Diffusion(nn.Module):
             loss = self.loss_fn(x_recon, noise, weights)
         else:
             loss = self.loss_fn(x_recon, x_start, weights)
-
         return loss
 
     def loss(self, x, state, weights=1.0):
         batch_size = len(x)
-        t = torch.randint(0, self.n_timesteps, (batch_size,),
-                          device=x.device).long()
+        t = torch.randint(0, self.n_timesteps, (batch_size,), device=x.device).long()
         return self.p_losses(x, state, t, weights)
 
     def forward(self, state, *args, **kwargs):

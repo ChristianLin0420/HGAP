@@ -43,6 +43,10 @@ class MLP(nn.Module):
     def forward(self, x, time, state):
 
         t = self.time_mlp(time)
+        
+        if len(t.shape) == 3:
+            t = t.squeeze(1)
+            
         x = torch.cat([x, t, state], dim=1)
         x = self.mid_layer(x)
 

@@ -64,14 +64,23 @@ class EpisodeRunner:
 
             # Pass the entire batch of experiences up till now to the agents
             # Receive the actions for each agent at this timestep in a batch of size 1
-            actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+            if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
+                actions, q_actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+            else:
+                actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+
             detached_actions = actions.detach()
+            detached_q_actions = None
+
+            if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
+                detached_q_actions = q_actions.detach()
 
             reward, terminated, env_info = self.env.step(detached_actions[0])
             episode_return += reward
 
             post_transition_data = {
                 "actions": detached_actions,
+                "q_actions": detached_q_actions,
                 "reward": [(reward,)],
                 "terminated": [(terminated != env_info.get("episode_limit", False),)],
             }
@@ -88,9 +97,18 @@ class EpisodeRunner:
         self.batch.update(last_data, ts=self.t)
 
         # Select actions in the last stored state
-        actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+        if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
+            actions, q_actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+        else:
+            actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+
         detached_actions = actions.detach()
-        self.batch.update({"actions": detached_actions}, ts=self.t)
+        detached_q_actions = None
+
+        if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
+                detached_q_actions = q_actions.detach()
+
+        self.batch.update({"actions": detached_actions, "q_actions": detached_q_actions}, ts=self.t)
 
         cur_stats = self.test_stats if test_mode else self.train_stats
         cur_returns = self.test_returns if test_mode else self.train_returns

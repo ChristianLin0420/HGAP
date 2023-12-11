@@ -14,7 +14,7 @@ buffer_size: 5000
 target_update_interval: 200
 
 # use the Q_Learner to train
-agent_output_type: "q"
+agent_output_type: "pi_logits"
 learner: "diffusion_learner"
 double_q: False
 mixer: "dfmix"

@@ -92,6 +92,7 @@ def run_sequential(args, logger):
         "state": {"vshape": env_info["state_shape"]},
         "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
         "actions": {"vshape": (1,), "group": "agents", "dtype": th.long},
+        "q_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.float32},
         "reconstruction": {"vshape": (1,), "group": "agents", "dtype": th.float32},
         "kl_gaussian": {"vshape": (1,), "group": "agents", "dtype": th.float32},
         "kl_dirichlet": {"vshape": (1,), "group": "agents", "dtype": th.float32},
