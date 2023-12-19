@@ -22,8 +22,6 @@ class DiffusionRNNAgent(nn.Module):
         self.actor = Diffusion(state_dim=args.rnn_hidden_dim, action_dim=args.n_actions, model=self.model, max_action=self.max_action,
                                beta_schedule=self.beta_schedule, n_timesteps=self.n_timesteps, predict_epsilon=False).to(args.device)
 
-        self.fc2 = nn.Linear(args.rnn_hidden_dim, args.n_actions)
-
     def init_hidden(self):
         # make hidden states on same device as model
         return self.fc1.weight.new(1, self.args.rnn_hidden_dim).zero_()
@@ -36,9 +34,25 @@ class DiffusionRNNAgent(nn.Module):
         # start diffusion process
         _, q, q_log, nonezero_mask, noise = self.actor(h)
 
-        # q = self.fc2(h)
         return q, h, q_log, nonezero_mask, noise
     
+    def sample_actions(self, inputs, actions, hidden_state):
+        x = F.relu(self.fc1(inputs))
+        h_in = hidden_state.reshape(-1, self.args.rnn_hidden_dim)
+        h = self.rnn(x, h_in)
+
+        # start diffusion process
+        actions = actions.type(th.float32)
+        noise = th.randn_like(actions)
+        t = th.randint(0, self.actor.n_timesteps, (actions.shape[0],), device=actions.device).long()
+
+        x_noisy = self.actor.q_sample(x_start = actions, t = t, noise = noise)
+        t = t.unsqueeze(-1).float()
+        x_recon = self.actor.model(x_noisy, t, h)
+
+        return x_recon.clone()
+
+
     def get_bc_loss(self, inputs, actions, hidden_state):
         x = F.relu(self.fc1(inputs))
         h_in = hidden_state.reshape(-1, self.args.rnn_hidden_dim)

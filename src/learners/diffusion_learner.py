@@ -54,17 +54,11 @@ class DiffusionLearner:
         rewards = batch["reward"][:, :-1]
         states = batch["state"][:, :-1]
         actions = batch["actions"][:, :-1]
+        q_actions = batch["q_actions"][:, :-1]
         terminated = batch["terminated"][:, :-1].float()
         mask = batch["filled"][:, :-1].float()
         mask[:, 1:] = mask[:, 1:] * (1 - terminated[:, :-1])
         avail_actions = batch["avail_actions"]
-
-        # print(f"rewards: {rewards.shape}")
-        # print(f"states: {states.shape}")
-        # print(f"actions: {actions.shape}")
-        # print(f"terminated: {terminated.shape}")
-        # print(f"mask: {mask.shape}")
-        # print(f"avail_actions: {avail_actions.shape}")
 
         # Calculate estimated Q-Values
         mac_out = []
@@ -72,12 +66,12 @@ class DiffusionLearner:
         bc_losses = []
         self.mac.init_hidden(batch.batch_size)
         for t in range(batch.max_seq_length):
-            if self.args.use_bc_loss:
-                agent_outs, agent_log_variance, nonezero_mask, noise, bc_loss = self.mac.forward(batch, t=t, forward_type="policy")
-                bc_loss = bc_loss.view(batch.batch_size, self.args.n_agents, 1)
-                bc_losses.append(bc_loss)
-            else:
+            if self.args.agent == "diffusion_rnn":
                 agent_outs, agent_log_variance, nonezero_mask, noise = self.mac.forward(batch, t=t, forward_type="policy")
+                orig_actions = batch["q_actions"][:, t]
+                recon_actions = self.mac.sample_actions(batch, t=t, forward_type="policy").view(batch.batch_size, self.args.n_agents, self.args.n_actions)
+                bc_loss = F.mse_loss(orig_actions, recon_actions, reduction='none').view(batch.batch_size, self.args.n_agents, self.args.n_actions)
+                bc_losses.append(bc_loss)
             agent_log_variance = nonezero_mask * (0.5 * agent_log_variance).exp() * noise
             agent_outs = agent_outs.view(batch.batch_size, self.args.n_agents, self.args.n_actions)
             agent_log_variance = agent_log_variance.view(batch.batch_size, self.args.n_agents, self.args.n_actions)
@@ -87,9 +81,6 @@ class DiffusionLearner:
         mac_out = th.stack(mac_out, dim=1) # Concat over time
         log_variances = th.stack(log_variances, dim=1) # Concat over time
 
-        # print(f"mac_out: {mac_out.shape}")
-        # print(f"log_variances: {log_variances.shape}")
-
         if self.args.use_bc_loss:
             bc_losses = th.stack(bc_losses, dim=1)
             bc_losses = bc_losses.mean(-1, keepdim=True)
@@ -98,31 +89,22 @@ class DiffusionLearner:
         chosen_action_qvals = th.gather(mac_out[:,:-1], dim=3, index=actions).squeeze(3)  # Remove the action dim
         chosen_action_q_logs = th.gather(log_variances[:, :-1], dim=3, index=actions).squeeze(3)  # Remove the action dim
 
-        # print(f"chosen_action_qvals: {chosen_action_qvals.shape}")
-        # print(f"chosen_action_q_logs: {chosen_action_q_logs.shape}")
-
         # Calculate the Q-Values necessary for the target
         target_mac_out = []
         target_log_variances = []
         self.target_mac.init_hidden(batch.batch_size)
         for t in range(batch.max_seq_length):
-            if self.args.use_bc_loss:
-                target_agent_outs, target_agent_log_variance, target_nonezero_mask, target_noise, _ = self.mac.forward(batch, t=t, forward_type="policy")
-            else:
-                target_agent_outs, target_agent_log_variance, target_nonezero_mask, target_noise = self.target_mac.forward(batch, t=t, forward_type="target")
+            if self.args.agent == "diffusion_rnn":
+                target_agent_outs, target_agent_log_variance, target_nonezero_mask, target_noise = self.mac.forward(batch, t=t, forward_type="policy")
             target_agent_log_variance = target_nonezero_mask * (0.5 * target_agent_log_variance).exp() * target_noise
             target_agent_outs = target_agent_outs.view(batch.batch_size, self.args.n_agents, self.args.n_actions)
             target_agent_log_variance = target_agent_log_variance.view(batch.batch_size, self.args.n_agents, self.args.n_actions)
             target_mac_out.append(target_agent_outs)
             target_log_variances.append(target_agent_log_variance)
 
-
         # We don't need the first timesteps Q-Value estimate for calculating targets
         target_mac_out = th.stack(target_mac_out[1:], dim=1)  # Concat across time
         target_log_variances = th.stack(target_log_variances[1:], dim=1)  # Concat across time
-
-        # print(f"target_mac_out: {target_mac_out.shape}")
-        # print(f"target_log_variances: {target_log_variances.shape}")
 
         # Mask out unavailable actions
         target_mac_out[avail_actions[:,1:] == 0] = -9999999
@@ -141,51 +123,45 @@ class DiffusionLearner:
             target_max_qvals = th.gather(target_mac_out, 3, cur_max_actions).squeeze(3)
             target_max_q_logs = th.gather(target_log_variances, 3, cur_max_actions).squeeze(3)
 
-        # print(f"target_max_qvals: {target_max_qvals.shape}")
-        # print(f"target_max_q_logs: {target_max_q_logs.shape}")
-
         # Mix
         if self.mixer is not None:
-            target_max_qvals = self.target_mixer(target_max_qvals, target_max_q_logs, batch["state"][:, 1:]).squeeze(3)
-            chosen_action_qvals = self.mixer(chosen_action_qvals, chosen_action_q_logs, batch["state"][:, :-1]).squeeze(3)
-            
-        # print(f"target_max_qvals: {target_max_qvals.shape}")
-        # print(f"chosen_action_qvals: {chosen_action_qvals.shape}")
+            target_max_qvals = self.target_mixer(target_max_qvals.clone(), target_max_q_logs, batch["state"][:, 1:]).squeeze(3)
+            chosen_action_qvals = self.mixer(chosen_action_qvals.clone(), chosen_action_q_logs, batch["state"][:, :-1]).squeeze(3)
 
         # Calculate 1-step Q-Learning targets
         targets = rewards + (self.args.gamma * (1 - terminated)) * target_max_qvals
 
-        # print(f"targets: {targets.shape}")
-
         # Td-error
         td_error = (chosen_action_qvals - targets.detach())
 
-        # print(f"td_error: {td_error.shape}")
-
         mask = mask.expand_as(td_error)
-
-        # print(f"mask: {mask.shape}")
 
         # 0-out the targets that came from padded data
         masked_td_error = td_error * mask
 
-        # Normal L2 loss, take mean over actual data
-        bc_delta = 0.000025
-        loss = (masked_td_error ** 2).sum() / mask.sum() + bc_losses.sum() * bc_delta
-
-        # Optimise Mixer + Agents
-        self.optimiser.zero_grad()
-        loss.backward()
-        grad_norm = th.nn.utils.clip_grad_norm_(self.params, self.args.grad_norm_clip)
-        self.optimiser.step()
+        # bc loss
+        bc_delta = 0.001
+        accumulated_bc_loss = bc_delta * bc_losses.sum() / (self.args.n_agents * self.args.n_actions)
 
         # Optimise Agents by BC loss
-        if self.args.use_bc_loss:
-            # self.agent_optimiser.zero_grad()
-            bc_losses = bc_losses.sum() * bc_delta
-            # bc_losses.backward()
-            # bc_grad_norm = th.nn.utils.clip_grad_norm_(self.agent_params, self.args.bc_grad_norm_clip)
-            # self.agent_optimiser.step()
+        # if self.args.use_bc_loss:
+        #     self.agent_optimiser.zero_grad()
+        #     accumulated_bc_loss.backward(retain_graph=True)
+        #     bc_grad_norm = th.nn.utils.clip_grad_norm_(self.agent_params, self.args.bc_grad_norm_clip)
+        #     self.agent_optimiser.step()
+
+        # Normal L2 loss, take mean over actual data
+        loss = (masked_td_error ** 2).sum() / mask.sum() #+ accumulated_bc_loss
+
+        # Optimise Mixer + Agents
+        self.agent_optimiser.zero_grad()
+        self.optimiser.zero_grad()
+        accumulated_bc_loss.backward(retain_graph=True)
+        loss.backward()
+        bc_grad_norm = th.nn.utils.clip_grad_norm_(self.agent_params, self.args.bc_grad_norm_clip)
+        grad_norm = th.nn.utils.clip_grad_norm_(self.params, self.args.grad_norm_clip)
+        self.agent_optimiser.step()
+        self.optimiser.step()
 
         if (episode_num - self.last_target_update_episode) / self.args.target_update_interval >= 1.0:
             self._update_targets()
@@ -195,8 +171,8 @@ class DiffusionLearner:
             self.logger.log_stat("loss", loss.item(), t_env)
             self.logger.log_stat("grad_norm", grad_norm.item(), t_env)
             if self.args.use_bc_loss:
-                self.logger.log_stat("bc_loss", bc_losses.item(), t_env)
-                # self.logger.log_stat("bc_grad_norm", bc_grad_norm.item(), t_env)
+                self.logger.log_stat("bc_loss", accumulated_bc_loss.item(), t_env)
+                self.logger.log_stat("bc_grad_norm", bc_grad_norm.item(), t_env)
             self.log_stats_t = t_env
 
     def _update_targets(self):

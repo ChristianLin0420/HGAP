@@ -1,5 +1,5 @@
 # --- Defaults ---
-experiment: "_diffusion_iter10_bc_pi_low_lr_000005_predict_original"
+experiment: "_test_0001"
 
 # --- pymarl options ---
 runner: "episode" # Runs 1 env for an episode

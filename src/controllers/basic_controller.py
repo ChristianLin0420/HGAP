@@ -22,10 +22,11 @@ class BasicMAC:
         if self.args.agent == "iqn_rnn":
             agent_outputs, rnd_quantiles = self.forward(ep_batch, t_ep, forward_type="approx")
         elif self.args.agent == "diffusion_rnn":
-            if self.args.use_bc_loss:
-                agent_outputs, q_log, nonezero_mask, noise, bc_losses = self.forward(ep_batch, t_ep)
-            else:
-                agent_outputs, q_log, nonezero_mask, noise = self.forward(ep_batch, t_ep)
+            agent_outputs, _, _, _ = self.forward(ep_batch, t_ep)
+            # if self.args.use_bc_loss:
+            #     agent_outputs, q_log, nonezero_mask, noise, bc_losses = self.forward(ep_batch, t_ep)
+            # else:
+            #     agent_outputs, q_log, nonezero_mask, noise = self.forward(ep_batch, t_ep)
         else:
             agent_outputs = self.forward(ep_batch, t_ep, forward_type=test_mode)
         if self.args.agent in ["iqn_rnn", "diffusion_rnn"]:
@@ -35,6 +36,40 @@ class BasicMAC:
         if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
             return chosen_actions, agent_outputs
         return chosen_actions
+    
+    def sample_actions(self, ep_batch, t, forward_type=None):
+        agent_inputs, action_inputs = self._build_inputs(ep_batch, t)
+        avail_actions = ep_batch["avail_actions"][:, t]
+
+        if self.args.agent == "diffusion_rnn":
+            agent_outs = self.agent.sample_actions(agent_inputs, action_inputs, self.hidden_states)
+        else:
+            raise NotImplementedError
+        
+        # Softmax the agent outputs if they're policy logits
+        if self.agent_output_type == "pi_logits":
+
+            if getattr(self.args, "mask_before_softmax", True):
+                # Make the logits for unavailable actions very negative to minimise their affect on the softmax
+                reshaped_avail_actions = avail_actions.reshape(ep_batch.batch_size * self.n_agents, -1)
+                agent_outs[reshaped_avail_actions == 0] = -1e10
+
+            agent_outs = th.nn.functional.softmax(agent_outs, dim=-1)
+            if not forward_type:
+                # Epsilon floor
+                epsilon_action_num = agent_outs.size(-1)
+                if getattr(self.args, "mask_before_softmax", True):
+                    # With probability epsilon, we will pick an available action uniformly
+                    epsilon_action_num = reshaped_avail_actions.sum(dim=1, keepdim=True).float()
+
+                agent_outs = ((1 - self.action_selector.epsilon) * agent_outs
+                               + th.ones_like(agent_outs) * self.action_selector.epsilon/epsilon_action_num)
+
+                if getattr(self.args, "mask_before_softmax", True):
+                    # Zero out the unavailable actions
+                    agent_outs[reshaped_avail_actions == 0] = 0.0
+
+        return agent_outs.clone()
 
     def forward(self, ep_batch, t, forward_type=None):
         agent_inputs, action_inputs = self._build_inputs(ep_batch, t)
@@ -43,7 +78,7 @@ class BasicMAC:
         if self.args.agent == "iqn_rnn":
             agent_outs, self.hidden_states, rnd_quantiles = self.agent(agent_inputs, self.hidden_states, forward_type=forward_type)
         elif self.args.agent == "diffusion_rnn":
-            bc_losses = self.agent.get_bc_loss(agent_inputs, action_inputs, self.hidden_states)
+            # bc_losses = self.agent.get_bc_loss(agent_inputs, action_inputs, self.hidden_states)
             agent_outs, self.hidden_states, q_log, nonezero_mask, noise = self.agent(agent_inputs, self.hidden_states)
         else:
             agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
@@ -73,8 +108,8 @@ class BasicMAC:
         if self.args.agent == "iqn_rnn":
             return agent_outs, rnd_quantiles
         elif self.args.agent == "diffusion_rnn":
-            if self.args.use_bc_loss:
-                return agent_outs, q_log, nonezero_mask, noise, bc_losses
+            # if self.args.use_bc_loss:
+            #     return agent_outs, q_log, nonezero_mask, noise, bc_losses
             return agent_outs, q_log, nonezero_mask, noise
         else:
             return agent_outs.view(ep_batch.batch_size, self.n_agents, -1)

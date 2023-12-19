@@ -80,7 +80,7 @@ class EpisodeRunner:
 
             post_transition_data = {
                 "actions": detached_actions,
-                "q_actions": detached_q_actions,
+                # "q_actions": detached_q_actions,
                 "reward": [(reward,)],
                 "terminated": [(terminated != env_info.get("episode_limit", False),)],
             }
@@ -108,7 +108,7 @@ class EpisodeRunner:
         if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
                 detached_q_actions = q_actions.detach()
 
-        self.batch.update({"actions": detached_actions, "q_actions": detached_q_actions}, ts=self.t)
+        # self.batch.update({"actions": detached_actions, "q_actions": detached_q_actions}, ts=self.t)
 
         cur_stats = self.test_stats if test_mode else self.train_stats
         cur_returns = self.test_returns if test_mode else self.train_returns

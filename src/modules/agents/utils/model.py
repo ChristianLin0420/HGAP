@@ -47,9 +47,9 @@ class MLP(nn.Module):
         if len(t.shape) == 3:
             t = t.squeeze(1)
             
-        x = torch.cat([x, t, state], dim=1)
-        x = self.mid_layer(x)
+        x_in = torch.cat([x, t, state], dim=1)
+        x_out = self.mid_layer(x_in)
 
-        return self.final_layer(x)
+        return self.final_layer(x_out)
 
 

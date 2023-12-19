@@ -129,19 +129,14 @@ class Diffusion(nn.Module):
         if return_diffusion:
             diffusion = [x]
 
-        # progress = Progress(self.n_timesteps) if verbose else Silent()
         for i in reversed(range(0, self.n_timesteps)):
             timesteps = torch.full(
                 (batch_size,), i, device=device, dtype=torch.long)
             x, model_mean, model_log_variance, nonezero_mask, noise = self.p_sample(
                 x, timesteps, state)
 
-            # progress.update({'t': i})
-
             if return_diffusion:
                 diffusion.append(x)
-
-        # progress.close()
 
         if return_diffusion:
             return x, torch.stack(diffusion, dim=1), model_mean, model_log_variance, nonezero_mask, noise
