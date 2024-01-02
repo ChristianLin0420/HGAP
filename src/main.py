@@ -129,7 +129,7 @@ if __name__ == '__main__':
 
     # Save to disk by default for sacred
     logger.info("Saving to FileStorageObserver in results/sacred.")
-    file_obs_path = os.path.join(results_path, "experiment{}".format(config_dict["experiment"]), "sacred", config_dict["map_name"], config_dict["mixer"])
+    file_obs_path = os.path.join(results_path, "{}".format(config_dict["experiment"]), "sacred", config_dict["map_name"], config_dict["mixer"])
     ex.observers.append(FileStorageObserver.create(file_obs_path))
 
     # ex.run_commandline(params)

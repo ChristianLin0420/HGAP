@@ -1,11 +1,10 @@
 
-export CUDA_VISIBLE_DEVICES=0,1
-
-train_count=1
+export CUDA_VISIBLE_DEVICES=7
+train_count=2
 train_index=0
-agent='central_rnn'
-mixers='ResQ'
-maps='1c3s5z'
+agent='hpns_rnn'
+mixers='hpn_qmix'
+maps='27m_vs_30m'
 gpu_id=0
 
 ### 1c3s5z 2s3z 3m 8m 3s_vs_3z 

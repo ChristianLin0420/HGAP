@@ -72,7 +72,10 @@ class BasicMAC:
         return agent_outs.clone()
 
     def forward(self, ep_batch, t, forward_type=None):
-        agent_inputs, action_inputs = self._build_inputs(ep_batch, t)
+        if self.args.agent == "hpns_rnn":
+            agent_inputs = self._build_inputs(ep_batch, t)
+        else:
+            agent_inputs, action_inputs = self._build_inputs(ep_batch, t)
         avail_actions = ep_batch["avail_actions"][:, t]
 
         if self.args.agent == "iqn_rnn":
@@ -120,11 +123,23 @@ class BasicMAC:
     def parameters(self):
         return self.agent.parameters()
 
+    def set_train_mode(self):
+        self.agent.train()
+
+    def set_evaluation_mode(self):
+        self.agent.eval()
+
     def load_state(self, other_mac):
         self.agent.load_state_dict(other_mac.agent.state_dict())
 
     def cuda(self):
         self.agent.cuda()
+
+    def cpu(self):
+        self.agent.cpu()
+
+    def get_device(self):
+        return next(self.parameters()).device
 
     def save_models(self, path):
         th.save(self.agent.state_dict(), "{}/agent.th".format(path))

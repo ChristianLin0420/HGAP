@@ -1,5 +1,5 @@
 # --- Defaults ---
-experiment: "_test_0001"
+experiment: "benchmarks/hpn"
 
 # --- pymarl options ---
 runner: "episode" # Runs 1 env for an episode
@@ -29,7 +29,7 @@ local_results_path: "results" # Path for local results
 
 # --- RL hyperparameters ---
 gamma: 0.99
-batch_size: 16 # Number of episodes to train on
+batch_size: 32 # Number of episodes to train on
 buffer_size: 32 # Size of the replay buffer
 lr: 0.0005 # Learning rate for agents
 critic_lr: 0.0005 # Learning rate for critics

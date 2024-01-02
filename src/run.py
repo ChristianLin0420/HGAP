@@ -86,6 +86,22 @@ def run_sequential(args, logger):
     args.n_agents = env_info["n_agents"]
     args.n_actions = env_info["n_actions"]
     args.state_shape = env_info["state_shape"]
+    args.obs_shape = env_info["obs_shape"]
+    args.accumulated_episodes = getattr(args, "accumulated_episodes", None)
+
+    if args.env in ["sc2", "sc2_v2", "gfootball"]:
+        if args.env in ["sc2", "sc2_v2"]:
+            args.output_normal_actions = env_info["n_normal_actions"]
+        args.n_enemies = env_info["n_enemies"]
+        args.n_allies = env_info["n_allies"]
+        # args.obs_ally_feats_size = env_info["obs_ally_feats_size"]
+        # args.obs_enemy_feats_size = env_info["obs_enemy_feats_size"]
+        args.state_ally_feats_size = env_info["state_ally_feats_size"]
+        args.state_enemy_feats_size = env_info["state_enemy_feats_size"]
+        args.obs_component = env_info["obs_component"]
+        args.state_component = env_info["state_component"]
+        args.map_type = env_info["map_type"]
+        args.agent_own_state_size = env_info["state_ally_feats_size"]
 
     # Default/Base scheme
     scheme = {
