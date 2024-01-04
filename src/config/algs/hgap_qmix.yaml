@@ -21,7 +21,7 @@ mac: "hpn_mac"
 #agent: "hpn_rnn"
 agent: "hgap"
 
-hgap_hyper_dim: 64
+hgap_hyper_dim: 128
 hpn_hyper_activation: 'relu'
 
 hpn_head_num: 1 # 2 for 3s_vs_5z and 6h_vs_8z
