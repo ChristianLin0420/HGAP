@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import math
 from torch.nn.parameter import Parameter
 
+from modules.agents.utils.model import SetTransformerEncoderLayer
+
 
 def kaiming_uniform_(tensor_w, tensor_b, mode='fan_in', gain=12 ** (-0.5)):
     fan = nn.init._calculate_correct_fan(tensor_w.data, mode)
@@ -44,7 +46,6 @@ class HPNS_AttentionAgent(nn.Module):
         self.n_actions = args.n_actions
         self.n_heads = args.hpn_head_num
         self.rnn_hidden_dim = args.rnn_hidden_dim
-        self.attention_hidden_dim = args.attention_hidden_dim
 
         # [4 + 1, (6, 5), (4, 5)]
         self.own_feats_dim, self.enemy_feats_dim, self.ally_feats_dim = input_shape
@@ -66,7 +67,7 @@ class HPNS_AttentionAgent(nn.Module):
         self.hyper_enemy = nn.Sequential(
             nn.Linear(self.enemy_feats_dim, args.hpn_hyper_dim),
             nn.ReLU(inplace=True),
-            nn.Linear(args.hpn_hyper_dim, ((self.enemy_feats_dim + 1) * self.attention_hidden_dim + 1) * self.n_heads)
+            nn.Linear(args.hpn_hyper_dim, ((self.enemy_feats_dim + 1) * self.rnn_hidden_dim + 1) * self.n_heads)
         )  # output shape: (enemy_feats_dim * rnn_hidden_dim + rnn_hidden_dim + 1)
 
         if self.args.map_type == "MMM":
@@ -84,6 +85,8 @@ class HPNS_AttentionAgent(nn.Module):
                 nn.Linear(args.hpn_hyper_dim, self.ally_feats_dim * self.rnn_hidden_dim * self.n_heads)
             )  # output shape: ally_feats_dim * rnn_hidden_dim
 
+        self.hybrid_attention = SetTransformerEncoderLayer(self.rnn_hidden_dim, 1, self.rnn_hidden_dim)
+
         self.unify_input_heads = Merger(self.n_heads, self.rnn_hidden_dim)
         self.rnn = nn.GRUCell(self.rnn_hidden_dim, self.rnn_hidden_dim)
         self.fc2_normal_actions = nn.Linear(self.rnn_hidden_dim, args.output_normal_actions)  # (no_op, stop, up, down, right, left)
@@ -100,6 +103,7 @@ class HPNS_AttentionAgent(nn.Module):
 
         # (1) Own feature
         embedding_own = self.fc1_own(own_feats_t)  # [bs * n_agents, rnn_hidden_dim]
+        set_embedding_own = embedding_own.view(bs * self.n_agents, 1, self.rnn_hidden_dim)  # [bs, n_agents, rnn_hidden_dim]
 
         # (2) ID embeddings
         if self.args.obs_agent_id:
@@ -122,7 +126,8 @@ class HPNS_AttentionAgent(nn.Module):
         embedding_enemies = th.matmul(enemy_feats_t.unsqueeze(1), fc1_w_enemy).view(
             bs * self.n_agents, self.n_enemies, self.n_heads, self.rnn_hidden_dim
         )  # [bs * n_agents, n_enemies, n_heads, rnn_hidden_dim]
-        embedding_enemies = embedding_enemies.sum(dim=1, keepdim=False)  # [bs * n_agents, n_heads, rnn_hidden_dim]
+        set_embedding_enemies = embedding_enemies.view(bs * self.n_agents, self.n_enemies, self.rnn_hidden_dim)  # [bs, n_agents, n_enemies, n_heads, rnn_hidden_dim]
+        # embedding_enemies = embedding_enemies.sum(dim=1, keepdim=False)  # [bs * n_agents, n_heads, rnn_hidden_dim]
 
         # (4) Ally features
         hyper_ally_out = self.hyper_ally(ally_feats_t)
@@ -138,12 +143,18 @@ class HPNS_AttentionAgent(nn.Module):
         embedding_allies = th.matmul(ally_feats_t.unsqueeze(1), fc1_w_ally).view(
             bs * self.n_agents, self.n_allies, self.n_heads, self.rnn_hidden_dim
         )  # [bs * n_agents, n_allies, head, rnn_hidden_dim]
-        embedding_allies = embedding_allies.sum(dim=1, keepdim=False)  # [bs * n_agents, head, rnn_hidden_dim]
+        set_embedding_allies = embedding_allies.view(bs * self.n_agents, self.n_allies, self.rnn_hidden_dim)  # [bs, n_agents, n_allies, n_heads, rnn_hidden_dim]
+        # embedding_allies = embedding_allies.sum(dim=1, keepdim=False)  # [bs * n_agents, head, rnn_hidden_dim]
 
-        # Final embedding
-        embedding = embedding_own + self.unify_input_heads(
-            embedding_enemies + embedding_allies
-        )  # [bs * n_agents, head, rnn_hidden_dim]
+        # # Final embedding
+        # embedding = embedding_own + self.unify_input_heads(
+        #     embedding_enemies + embedding_allies
+        # )  # [bs * n_agents, head, rnn_hidden_dim]
+
+        # set sttetion
+        set_embedding = th.cat([set_embedding_own, set_embedding_enemies, set_embedding_allies], dim=1)  # [bs, n_agents, 1 + n_enemies + n_allies, rnn_hidden_dim]
+
+        embedding = self.hybrid_attention(set_embedding).view(bs * self.n_agents, self.rnn_hidden_dim)  # [bs, n_agents, 1 + n_enemies + n_allies, rnn_hidden_dim]
 
         x = F.relu(embedding, inplace=True)
         h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)

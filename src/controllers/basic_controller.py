@@ -72,7 +72,7 @@ class BasicMAC:
         return agent_outs.clone()
 
     def forward(self, ep_batch, t, forward_type=None):
-        if self.args.agent == "hpns_rnn":
+        if self.args.agent in ["hpns_rnn", "hpns_attention", "hgap"]:
             agent_inputs = self._build_inputs(ep_batch, t)
         else:
             agent_inputs, action_inputs = self._build_inputs(ep_batch, t)
