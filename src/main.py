@@ -120,6 +120,7 @@ if __name__ == '__main__':
     config_dict["agent"] = _get_val_by_argument(params, "--agent")
     config_dict["use_cuda"] = th.cuda.is_available()
     config_dict["gpu_id"] = _get_gpu_id(params)
+    config_dict["experiment"] = alg_config["experiment"]
 
     if th.cuda.is_available():
         nvmlInit()

@@ -1,4 +1,5 @@
 # --- QMIX specific parameters ---
+experiment: "hpn_attention"
 
 # use epsilon greedy action selector
 action_selector: "epsilon_greedy"

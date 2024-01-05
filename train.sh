@@ -1,12 +1,12 @@
 
 export CUDA_VISIBLE_DEVICES=0,1
-train_count=1
+train_count=3
 train_index=0
 # agent='hpns_attention'
 # mixers='hpn_attention_qmix'
 agent='hgap'
 mixers='hgap_qmix'
-maps='3m'
+maps='3s_vs_5z 5m_vs_6m'
 gpu_id=0
 
 ### 1c3s5z 2s3z 3m 8m 3s_vs_3z 

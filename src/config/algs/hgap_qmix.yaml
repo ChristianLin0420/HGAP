@@ -1,4 +1,5 @@
 # --- QMIX specific parameters ---
+experiment: "hgap"
 
 # use epsilon greedy action selector
 action_selector: "epsilon_greedy"

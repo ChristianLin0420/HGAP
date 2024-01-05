@@ -1,5 +1,5 @@
 # --- Defaults ---
-experiment: "hgap"
+experiment: "hpn_attention"
 
 # --- pymarl options ---
 runner: "episode" # Runs 1 env for an episode
