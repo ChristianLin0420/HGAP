@@ -68,6 +68,12 @@ class HGAP_Agent(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(args.hgap_hyper_dim, self.own_feats_dim * self.hgap_hyper_dim * self.n_heads)
         )
+
+        self.hyper_enemies_embedding = nn.Sequential(
+            nn.Linear(self.enemy_feats_dim, args.hgap_hyper_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(args.hgap_hyper_dim, self.enemy_feats_dim * self.hgap_hyper_dim * self.n_heads)
+        )
             
         # Hyper network for GAT attention weights
         self.hyper_attention_weight = nn.Sequential(
@@ -101,10 +107,17 @@ class HGAP_Agent(nn.Module):
         enemy_feats_t = enemy_feats_t.reshape(bs * self.n_agents, self.n_enemies, self.enemy_feats_dim)  # [bs * n_agents * n_enemies, enemy_fea_dim]
         ally_feats_t = ally_feats_t.reshape(bs * self.n_agents, self.n_allies, self.ally_feats_dim)  # [bs * n_agents * n_allies, ally_fea_dim]
 
-        feats_t = th.cat([own_feats_t, ally_feats_t, enemy_feats_t], dim=1)  # [bs * n_agents,  n_entities, feat_dim]
+        # feats_t = th.cat([own_feats_t, ally_feats_t, enemy_feats_t], dim=1)  # [bs * n_agents,  n_entities, feat_dim]
+        feats_t_ally = th.cat([own_feats_t, ally_feats_t], dim=1)  # [bs * n_agents,  n_entities, feat_dim]
 
-        hyper_embedding_weight = self.hyper_embedding(feats_t).view(bs * self.n_agents * self.n_entities, self.own_feats_dim, self.hgap_hyper_dim * self.n_heads)  # [bs * n_agents * (1 + n_enemies + n_allies), feat_dim, rnn_hidden_dim * n_heads]
-        entities_embedding = th.matmul(feats_t.view(bs * self.n_agents * self.n_entities, 1, self.own_feats_dim), hyper_embedding_weight).view(bs, self.n_agents, self.n_entities, self.n_heads, self.hgap_hyper_dim)
+        hyper_ally_embedding_weight = self.hyper_embedding(feats_t_ally).view(bs * self.n_agents * (self.n_allies + 1), self.own_feats_dim, self.hgap_hyper_dim * self.n_heads)  # [bs * n_agents * (1 + n_enemies + n_allies), feat_dim, rnn_hidden_dim * n_heads]
+        hyper_enemy_embedding_weight = self.hyper_enemies_embedding(enemy_feats_t).view(bs * self.n_agents * self.n_enemies, self.enemy_feats_dim, self.hgap_hyper_dim * self.n_heads)  # [bs * n_agents * n_enemies, feat_dim, rnn_hidden_dim * n_heads]
+
+        # hyper_embedding_weight = self.hyper_embedding(feats_t).view(bs * self.n_agents * self.n_entities, self.own_feats_dim, self.hgap_hyper_dim * self.n_heads)  # [bs * n_agents * (1 + n_enemies + n_allies), feat_dim, rnn_hidden_dim * n_heads]
+        # entities_embedding = th.matmul(feats_t.view(bs * self.n_agents * self.n_entities, 1, self.own_feats_dim), hyper_embedding_weight).view(bs, self.n_agents, self.n_entities, self.n_heads, self.hgap_hyper_dim)
+        ally_embedding = th.matmul(feats_t_ally.view(bs * self.n_agents * (self.n_allies + 1), 1, self.own_feats_dim), hyper_ally_embedding_weight).view(bs, self.n_agents, self.n_allies + 1, self.n_heads, self.hgap_hyper_dim)
+        enemy_embedding = th.matmul(enemy_feats_t.view(bs * self.n_agents * self.n_enemies, 1, self.enemy_feats_dim), hyper_enemy_embedding_weight).view(bs, self.n_agents, self.n_enemies, self.n_heads, self.hgap_hyper_dim)
+        entities_embedding = th.cat([ally_embedding, enemy_embedding], dim=2)  # [bs, n_agents, n_entities, n_heads, rnn_hidden_dim]
 
         entities_embedding_repeat = entities_embedding.repeat(1, 1, self.n_entities, 1, 1)  # [bs, n_agents, n_entities * n_entities, n_heads, rnn_hidden_dim]
         entities_embedding_interleave_repeat = entities_embedding.repeat_interleave(self.n_entities, dim=2)  # [bs, n_agents, n_entities * n_entities, n_heads, rnn_hidden_dim]
