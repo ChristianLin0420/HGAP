@@ -19,3 +19,6 @@
 bane_vs_bane: [24, 24, 7]
 corridor:     [6, 24, 5]
 MMM2:         [10, 12, 5]
+10gen_protoss: [5, 5, 5]
+10gen_terran: [5, 5, 5]
+10gen_zerg: [5, 5, 5]
