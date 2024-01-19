@@ -2,7 +2,7 @@ from envs import REGISTRY as env_REGISTRY
 from functools import partial
 from components.episode_buffer import EpisodeBatch
 import numpy as np
-
+import os
 
 class EpisodeRunner:
 
@@ -52,13 +52,22 @@ class EpisodeRunner:
         episode_return = 0
         self.mac.init_hidden(batch_size=self.batch_size)
 
+        map_width, map_height = self.env.get_map_sizes()
+
+        episode_record = {"map_size": [map_width, map_height], "positions": [], "actions": [], "attention_weights": []}
+
         while not terminated:
+
+            current_positions = self.env.get_positions()
 
             pre_transition_data = {
                 "state": [self.env.get_state()],
                 "avail_actions": [self.env.get_avail_actions()],
-                "obs": [self.env.get_obs()]
+                "obs": [self.env.get_obs()],
             }
+
+            if self.args.evaluate:
+                episode_record["positions"].append([current_positions])
 
             self.batch.update(pre_transition_data, ts=self.t)
 
@@ -66,6 +75,8 @@ class EpisodeRunner:
             # Receive the actions for each agent at this timestep in a batch of size 1
             if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
                 actions, q_actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+            elif self.args.agent in ["hgap"] and self.args.evaluate:
+                actions, attention_weights = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
             else:
                 actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
 
@@ -78,12 +89,23 @@ class EpisodeRunner:
             reward, terminated, env_info = self.env.step(detached_actions[0])
             episode_return += reward
 
-            post_transition_data = {
-                "actions": detached_actions,
-                # "q_actions": detached_q_actions,
-                "reward": [(reward,)],
-                "terminated": [(terminated != env_info.get("episode_limit", False),)],
-            }
+            if self.args.agent in ["hgap"] and self.args.evaluate:
+                detached_attention_weights = attention_weights.detach()
+                post_transition_data = {
+                    "actions": detached_actions,
+                    "attention_weights": detached_attention_weights,
+                    "reward": [(reward,)],
+                    "terminated": [(terminated != env_info.get("episode_limit", False),)],
+                }
+                episode_record["actions"].append([detached_actions[0].tolist()])
+                episode_record["attention_weights"].append([detached_attention_weights.tolist()])
+            else:
+                post_transition_data = {
+                    "actions": detached_actions,
+                    # "q_actions": detached_q_actions,
+                    "reward": [(reward,)],
+                    "terminated": [(terminated != env_info.get("episode_limit", False),)],
+                }
 
             self.batch.update(post_transition_data, ts=self.t)
 
@@ -92,13 +114,15 @@ class EpisodeRunner:
         last_data = {
             "state": [self.env.get_state()],
             "avail_actions": [self.env.get_avail_actions()],
-            "obs": [self.env.get_obs()]
+            "obs": [self.env.get_obs()],
         }
         self.batch.update(last_data, ts=self.t)
 
         # Select actions in the last stored state
         if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
             actions, q_actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+        elif self.args.agent in ["hgap"] and self.args.evaluate:
+            actions, attention_weights = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
         else:
             actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
 
@@ -106,7 +130,7 @@ class EpisodeRunner:
         detached_q_actions = None
 
         if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
-                detached_q_actions = q_actions.detach()
+            detached_q_actions = q_actions.detach()
 
         # self.batch.update({"actions": detached_actions, "q_actions": detached_q_actions}, ts=self.t)
 
@@ -121,6 +145,24 @@ class EpisodeRunner:
             self.t_env += self.t
 
         cur_returns.append(episode_return)
+
+        if test_mode:
+            print("Replay win rate:", cur_stats["battle_won"], flush=True)
+            episode_record["positions"].append([self.env.get_positions()])
+
+            for k, v in episode_record.items():
+                episode_record[k] = np.array(v)
+                if k != "map_size":
+                    episode_record[k] = episode_record[k].squeeze(1)
+                episode_record[k] = episode_record[k].tolist()
+
+            import json
+            json_object = json.dumps(episode_record, indent=4)
+
+            os.makedirs(f"/home/chrislin/MADP/results/hgap_testing/{self.args.map_name}/records", exist_ok=True)
+            with open(f"/home/chrislin/MADP/results/hgap_testing/{self.args.map_name}/records/{self.args.load_step}.json", "w") as outfile:
+                outfile.write(json_object)
+
 
         if test_mode and (len(self.test_returns) == self.args.test_nepisode):
             if self.args.save_replay:

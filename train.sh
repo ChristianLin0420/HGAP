@@ -1,13 +1,14 @@
 
 export CUDA_VISIBLE_DEVICES=0,1
-train_count=3
+train_count=1
 train_index=0
 # agent='hpns_attention'
 # mixers='hpn_attention_qmix'
 agent='hgap'
 mixers='hgap_qplex'
-maps='10gen_zerg'
+maps='MMM2'
 gpu_id=0
+checkpoint=''
 
 ### 1c3s5z 2s3z 3m 8m 3s_vs_3z 
 ### 3s_vs_5z 3s5z 5m_vs_6m 
@@ -19,7 +20,9 @@ gpu_id=0
 for i in $(seq 1 $train_count); do 
     for mixer in $mixers; do
         for map in $maps; do
-            python src/main.py --config=$mixer --env-config=sc2_v2_zerg --map_name=$map --gpu_id=$gpu_id --agent=$agent
+            python src/main.py --config=$mixer --env-config=sc2 --map_name=$map --gpu_id=$gpu_id --agent=$agent --checkpoint=$checkpoint
         done
     done
 done
+
+# python src/visualization.py --json_path /home/chrislin/MADP/results/hgap_testing/$maps.json

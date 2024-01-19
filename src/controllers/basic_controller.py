@@ -19,22 +19,26 @@ class BasicMAC:
     def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False):
         # Only select actions for the selected batch elements in bs
         avail_actions = ep_batch["avail_actions"][:, t_ep]
+
         if self.args.agent == "iqn_rnn":
             agent_outputs, rnd_quantiles = self.forward(ep_batch, t_ep, forward_type="approx")
         elif self.args.agent == "diffusion_rnn":
             agent_outputs, _, _, _ = self.forward(ep_batch, t_ep)
-            # if self.args.use_bc_loss:
-            #     agent_outputs, q_log, nonezero_mask, noise, bc_losses = self.forward(ep_batch, t_ep)
-            # else:
-            #     agent_outputs, q_log, nonezero_mask, noise = self.forward(ep_batch, t_ep)
         else:
-            agent_outputs = self.forward(ep_batch, t_ep, forward_type=test_mode)
+            if self.args.agent in ["hgap", "updet"] and self.args.evaluate:
+                agent_outputs, attention_weight = self.forward(ep_batch, t_ep)
+            else:
+                agent_outputs = self.forward(ep_batch, t_ep, forward_type=test_mode)
+
         if self.args.agent in ["iqn_rnn", "diffusion_rnn"]:
             agent_outputs = agent_outputs.view(ep_batch.batch_size, self.n_agents, self.args.n_actions, -1).mean(dim=3)
+            
         chosen_actions = self.action_selector.select_action(agent_outputs[bs], avail_actions[bs], t_env, test_mode=test_mode)
 
         if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
             return chosen_actions, agent_outputs
+        elif self.args.agent in ["hgap", "updet"] and self.args.evaluate:
+            return chosen_actions, attention_weight
         return chosen_actions
     
     def sample_actions(self, ep_batch, t, forward_type=None):
@@ -72,7 +76,7 @@ class BasicMAC:
         return agent_outs.clone()
 
     def forward(self, ep_batch, t, forward_type=None):
-        if self.args.agent in ["hpns_rnn", "hpns_attention", "hgap"]:
+        if self.args.agent in ["hpns_rnn", "hpns_attention", "hgap", "updet"]:
             agent_inputs = self._build_inputs(ep_batch, t)
         else:
             agent_inputs, action_inputs = self._build_inputs(ep_batch, t)
@@ -84,7 +88,10 @@ class BasicMAC:
             # bc_losses = self.agent.get_bc_loss(agent_inputs, action_inputs, self.hidden_states)
             agent_outs, self.hidden_states, q_log, nonezero_mask, noise = self.agent(agent_inputs, self.hidden_states)
         else:
-            agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
+            if self.args.agent in ["hgap", "updet"] and self.args.evaluate:
+                agent_outs, self.hidden_states, attention_weights = self.agent(agent_inputs, self.hidden_states)
+            else:
+                agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
 
         # Softmax the agent outputs if they're policy logits
         if self.agent_output_type == "pi_logits":
@@ -115,6 +122,8 @@ class BasicMAC:
             #     return agent_outs, q_log, nonezero_mask, noise, bc_losses
             return agent_outs, q_log, nonezero_mask, noise
         else:
+            if self.args.agent in ["hgap", "updet"] and self.args.evaluate:
+                return agent_outs, attention_weights
             return agent_outs.view(ep_batch.batch_size, self.n_agents, -1)
 
     def init_hidden(self, batch_size):

@@ -1,4 +1,5 @@
 # --- QMIX specific parameters ---
+experiment: "hgap_tt"
 
 # use epsilon greedy action selector
 action_selector: "epsilon_greedy"
@@ -6,12 +7,16 @@ epsilon_start: 1.0
 epsilon_finish: 0.05
 epsilon_anneal_time: 50000
 
-runner: "episode"
-
+runner: "parallel" # "parallel"
+batch_size_run: 8
 buffer_size: 5000
+batch_size: 16
 
 # update the target network every {} episodes
 target_update_interval: 200
+
+# controller
+mac: "hpn_mac"
 
 # use the Q_Learner to train
 agent_output_type: "q"
@@ -21,5 +26,7 @@ mixer: "qmix"
 mixing_embed_dim: 32
 hypernet_layers: 2
 hypernet_embed: 64
+
+hgap_hyper_dim: 128
 
 name: "qmix"

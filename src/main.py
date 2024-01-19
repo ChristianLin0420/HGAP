@@ -50,6 +50,8 @@ def _get_val_by_argument(params, argument):
         if _v.split("=")[0] == argument:
             return _v.split("=")[1]
 
+    return None
+
 def _get_gpu_id(params):
     return _get_val_by_argument(params, "--gpu_id")
 
@@ -113,6 +115,9 @@ if __name__ == '__main__':
     alg_config = _get_config(params, "--config", "algs")
     map_config = _get_map_config(params)
 
+    # Get checkpoint path
+    checkpoint_path = _get_val_by_argument(params, "--checkpoint")
+
     env_config["env_args"]["map_name"] = map_config["map_name"]
     config_dict = recursive_dict_update(config_dict, env_config)
     config_dict = recursive_dict_update(config_dict, alg_config)
@@ -121,6 +126,9 @@ if __name__ == '__main__':
     config_dict["use_cuda"] = th.cuda.is_available()
     config_dict["gpu_id"] = _get_gpu_id(params)
     config_dict["experiment"] = alg_config["experiment"]
+    config_dict["checkpoint_path"] = checkpoint_path
+    if _get_val_by_argument(params, "--load_step") is not None:
+        config_dict["load_step"] = _get_val_by_argument(params, "--load_step")
 
     if th.cuda.is_available():
         nvmlInit()

@@ -117,8 +117,6 @@ class HGAP_Agent(nn.Module):
         hyper_ally_embedding_weight = self.hyper_allies_embedding(ally_feats_t).view(bs * self.n_agents * (self.n_allies), self.ally_feats_dim, self.hgap_hyper_dim * self.n_heads)  # [bs * n_agents * (1 + n_enemies + n_allies), feat_dim, rnn_hidden_dim * n_heads]
         hyper_enemy_embedding_weight = self.hyper_enemies_embedding(enemy_feats_t).view(bs * self.n_agents * self.n_enemies, self.enemy_feats_dim, self.hgap_hyper_dim * self.n_heads)  # [bs * n_agents * n_enemies, feat_dim, rnn_hidden_dim * n_heads]
 
-        # hyper_embedding_weight = self.hyper_embedding(feats_t).view(bs * self.n_agents * self.n_entities, self.own_feats_dim, self.hgap_hyper_dim * self.n_heads)  # [bs * n_agents * (1 + n_enemies + n_allies), feat_dim, rnn_hidden_dim * n_heads]
-        # entities_embedding = th.matmul(feats_t.view(bs * self.n_agents * self.n_entities, 1, self.own_feats_dim), hyper_embedding_weight).view(bs, self.n_agents, self.n_entities, self.n_heads, self.hgap_hyper_dim)
         own_embedding = th.matmul(own_feats_t.view(bs * self.n_agents, 1, self.own_feats_dim), hyper_own_embedding_weight).view(bs, self.n_agents, 1, self.n_heads, self.hgap_hyper_dim)
         ally_embedding = th.matmul(ally_feats_t.view(bs * self.n_agents * (self.n_allies), 1, self.ally_feats_dim), hyper_ally_embedding_weight).view(bs, self.n_agents, self.n_allies, self.n_heads, self.hgap_hyper_dim)
         enemy_embedding = th.matmul(enemy_feats_t.view(bs * self.n_agents * self.n_enemies, 1, self.enemy_feats_dim), hyper_enemy_embedding_weight).view(bs, self.n_agents, self.n_enemies, self.n_heads, self.hgap_hyper_dim)
@@ -154,4 +152,8 @@ class HGAP_Agent(nn.Module):
 
         # Concat 2 types of Q-values
         q = th.cat((q_normal, q_attacks), dim=-1)  # [bs, n_agents, 6 + n_enemies]
+
+        if self.args.evaluate:
+            return q.view(bs, self.n_agents, -1), hh.view(bs, self.n_agents, -1), hyper_attention_weight.view(self.n_agents, self.n_entities, self.n_entities)  # [bs, n_agents, 6 + n_enemies]
+        
         return q.view(bs, self.n_agents, -1), hh.view(bs, self.n_agents, -1)  # [bs, n_agents, 6 + n_enemies]

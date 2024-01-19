@@ -11,7 +11,7 @@ epsilon_anneal_time: 100000 # 500000 for 6h_vs_8z
 runner: "parallel"
 batch_size_run: 8
 buffer_size: 5000
-batch_size: 128
+batch_size: 16
 
 # update the target network every {} episodes
 target_update_interval: 200
@@ -30,9 +30,9 @@ hpn_hyper_activation: 'relu'
 rnn_hidden_dim: 64 # Size of hidden state for default rnn agent
 agent_output_type: "q"
 
-learner: "dmaq_qatten_learner"
+learner: "q_learner"
 double_q: True
-mixer: "dmaq"
+mixer: "vdn"
 mixing_embed_dim: 32
 hypernet_embed: 64
 adv_hypernet_layers: 2
@@ -46,4 +46,4 @@ weighted_head: True
 is_adv_attention: True
 is_stop_gradient: True
 
-name: "hpn_qplex"
+name: "hpn_vdn"

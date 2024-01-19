@@ -94,6 +94,7 @@ def run_sequential(args, logger):
             args.output_normal_actions = env_info["n_normal_actions"]
         args.n_enemies = env_info["n_enemies"]
         args.n_allies = env_info["n_allies"]
+        args.n_entities = args.n_enemies + args.n_allies + 1
         # args.obs_ally_feats_size = env_info["obs_ally_feats_size"]
         # args.obs_enemy_feats_size = env_info["obs_enemy_feats_size"]
         args.state_ally_feats_size = env_info["state_ally_feats_size"]
@@ -109,6 +110,7 @@ def run_sequential(args, logger):
         "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
         "actions": {"vshape": (1,), "group": "agents", "dtype": th.long},
         "q_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.float32},
+        "attention_weights": {"vshape": (args.n_entities, args.n_entities), "group": "agents", "dtype": th.float32},
         "reconstruction": {"vshape": (1,), "group": "agents", "dtype": th.float32},
         "kl_gaussian": {"vshape": (1,), "group": "agents", "dtype": th.float32},
         "kl_dirichlet": {"vshape": (1,), "group": "agents", "dtype": th.float32},
@@ -161,13 +163,13 @@ def run_sequential(args, logger):
             timestep_to_load = max(timesteps)
         else:
             # choose the timestep closest to load_step
-            timestep_to_load = min(timesteps, key=lambda x: abs(x - args.load_step))
+            timestep_to_load = args.load_step # min(timesteps, key=lambda x: abs(x - args.load_step))
 
         model_path = os.path.join(args.checkpoint_path, str(timestep_to_load))
 
         logger.console_logger.info("Loading model from {}".format(model_path))
         learner.load_models(model_path)
-        runner.t_env = timestep_to_load
+        runner.t_env = 0 # timestep_to_load
 
         if args.evaluate or args.save_replay:
             evaluate_sequential(args, runner)

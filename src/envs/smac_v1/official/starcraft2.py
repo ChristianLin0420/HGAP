@@ -1132,6 +1132,26 @@ class StarCraft2Env(MultiAgentEnv):
         agents_obs = [self.get_obs_agent(i) for i in range(self.n_agents)]
         return agents_obs
 
+    def get_positions(self):
+        """Returns the agent positions on the map."""
+        agent_positions = np.zeros((self.n_agents + self.n_enemies, 2))
+
+        for i in range(self.n_agents):
+            agent = self.get_unit_by_id(i)
+            agent_positions[i, 0] = agent.pos.x if agent.health > 0 else -agent.pos.x
+            agent_positions[i, 1] = agent.pos.y if agent.health > 0 else -agent.pos.y
+
+        # get enemy positions
+        for i, e_unit in enumerate(self.enemies.values()):
+            agent_positions[i + self.n_agents, 0] = e_unit.pos.x if e_unit.health > 0 else -e_unit.pos.x
+            agent_positions[i + self.n_agents, 1] = e_unit.pos.y if e_unit.health > 0 else -e_unit.pos.y
+
+        return agent_positions
+    
+    def get_map_sizes(self):
+        """Returns the map sizes."""
+        return self.map_x, self.map_y
+
     def get_state(self):
         """Returns the global state.
         NOTE: This functon should not be used during decentralised execution.
