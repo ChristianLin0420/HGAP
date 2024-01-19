@@ -8,15 +8,15 @@ epsilon_start: 1.0
 epsilon_finish: 0.05
 epsilon_anneal_time: 500000 # 500000 for 6h_vs_8z
 
-# runner: "parallel" # "parallel" episode
-# batch_size_run: 8
-# buffer_size: 5000
-# batch_size: 8
-
-runner: "episode" # "parallel" episode
-batch_size_run: 1
+runner: "parallel" # "parallel" episode
+batch_size_run: 8
 buffer_size: 5000
-batch_size: 1
+batch_size: 32
+
+# runner: "episode" # "parallel" episode
+# batch_size_run: 1
+# buffer_size: 5000
+# batch_size: 1
 
 # update the target network every {} episodes
 target_update_interval: 200

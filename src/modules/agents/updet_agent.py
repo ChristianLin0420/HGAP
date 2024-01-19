@@ -61,7 +61,7 @@ class UPDeT(nn.Module):
         # [bs * n_agents, 1, emb], [bs * n_agents, n_enemies, emb], [bs * n_agents, n_allies, emb]
         feats = torch.cat((own_feats, ally_feats, enemy_feats), dim=1).reshape(bs * self.n_agents, 1 + self.n_enemies + self.n_allies, self.args.emb)
 
-        outputs, _ = self.transformer.forward(feats, hidden_state, None)
+        outputs, _, dot = self.transformer.forward(feats, hidden_state, None)
         # first output for 6 action (no_op stop up down left right)
         q_basic_actions = self.q_basic(outputs[:, 0, :])
 
@@ -81,6 +81,9 @@ class UPDeT(nn.Module):
 
         # concat basic action Q with enemy attack Q
         q = torch.cat((q_basic_actions, q_enemies), 1)
+
+        if self.args.evaluate:
+            return q, h, dot.view(self.n_agents, self.n_entities, self.n_entities)
 
         return q, h
 
@@ -139,7 +142,7 @@ class SelfAttention(nn.Module):
         # swap h, t back, unify heads
         out = out.transpose(1, 2).contiguous().view(b, t, h * e)
 
-        return self.unifyheads(out)
+        return self.unifyheads(out), dot
 
 class TransformerBlock(nn.Module):
 
@@ -163,7 +166,7 @@ class TransformerBlock(nn.Module):
     def forward(self, x_mask):
         x, mask = x_mask
 
-        attended = self.attention(x, mask)
+        attended, dot = self.attention(x, mask)
 
         x = self.norm1(attended + x)
 
@@ -175,7 +178,7 @@ class TransformerBlock(nn.Module):
 
         x = self.do(x)
 
-        return x, mask
+        return x, mask, dot
 
 
 class Transformer(nn.Module):
@@ -198,15 +201,18 @@ class Transformer(nn.Module):
 
     def forward(self, x, h, mask):
 
-        tokens = torch.cat((tokens, h), 1)
+        bn = x.size(0)
+        h = h.view(bn, 1, -1)
+
+        tokens = torch.cat((x, h), 1)
 
         b, t, e = tokens.size()
 
-        x, mask = self.tblocks((tokens, mask))
+        x, mask, dot = self.tblocks((tokens, mask))
 
         x = self.toprobs(x.view(b * t, e)).view(b, t, self.num_tokens)
-
-        return x, tokens
+        
+        return x, tokens, dot
 
 def mask_(matrices, maskval=0.0, mask_diagonal=True):
 

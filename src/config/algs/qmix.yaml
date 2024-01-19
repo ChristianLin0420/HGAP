@@ -1,5 +1,5 @@
 # --- QMIX specific parameters ---
-experiment: "hgap_tt"
+experiment: "updet_visualization"
 
 # use epsilon greedy action selector
 action_selector: "epsilon_greedy"
@@ -10,7 +10,7 @@ epsilon_anneal_time: 50000
 runner: "parallel" # "parallel"
 batch_size_run: 8
 buffer_size: 5000
-batch_size: 16
+batch_size: 128
 
 # update the target network every {} episodes
 target_update_interval: 200

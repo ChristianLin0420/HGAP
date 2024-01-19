@@ -1,13 +1,12 @@
 
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4
 train_count=1
 train_index=0
-# agent='hpns_attention'
-# mixers='hpn_attention_qmix'
-agent='hgap'
-mixers='hgap_qplex'
-maps='MMM2'
-gpu_id=0
+
+agent='updet'
+mixers='qmix'
+maps='3m 3s5z'
+gpu_id=4
 checkpoint=''
 
 ### 1c3s5z 2s3z 3m 8m 3s_vs_3z 
@@ -24,5 +23,3 @@ for i in $(seq 1 $train_count); do
         done
     done
 done
-
-# python src/visualization.py --json_path /home/chrislin/MADP/results/hgap_testing/$maps.json
