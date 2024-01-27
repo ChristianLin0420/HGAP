@@ -83,7 +83,7 @@ class UPDeT(nn.Module):
         q = torch.cat((q_basic_actions, q_enemies), 1)
 
         if self.args.evaluate:
-            return q, h, dot.view(self.n_agents, self.n_entities, self.n_entities)
+            return q, h, dot[:self.n_agents, :-1, :-1].view(self.n_agents, self.n_entities, self.n_entities)
 
         return q, h
 

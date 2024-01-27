@@ -27,6 +27,8 @@ class BasicMAC:
         else:
             if self.args.agent in ["hgap", "updet"] and self.args.evaluate:
                 agent_outputs, attention_weight = self.forward(ep_batch, t_ep)
+                if self.args.agent == "updet":
+                    agent_outputs = agent_outputs.reshape(ep_batch.batch_size, self.n_agents, -1)
             else:
                 agent_outputs = self.forward(ep_batch, t_ep, forward_type=test_mode)
 

@@ -75,7 +75,7 @@ class EpisodeRunner:
             # Receive the actions for each agent at this timestep in a batch of size 1
             if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
                 actions, q_actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
-            elif self.args.agent in ["hgap"] and self.args.evaluate:
+            elif self.args.agent in ["hgap", "updet"] and self.args.evaluate:
                 actions, attention_weights = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
             else:
                 actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
@@ -89,7 +89,7 @@ class EpisodeRunner:
             reward, terminated, env_info = self.env.step(detached_actions[0])
             episode_return += reward
 
-            if self.args.agent in ["hgap"] and self.args.evaluate:
+            if self.args.agent in ["hgap", "updet"] and self.args.evaluate:
                 detached_attention_weights = attention_weights.detach()
                 post_transition_data = {
                     "actions": detached_actions,
@@ -121,7 +121,7 @@ class EpisodeRunner:
         # Select actions in the last stored state
         if self.args.agent == "diffusion_rnn" and self.args.use_bc_loss:
             actions, q_actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
-        elif self.args.agent in ["hgap"] and self.args.evaluate:
+        elif self.args.agent in ["hgap", "updet"] and self.args.evaluate:
             actions, attention_weights = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
         else:
             actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
