@@ -1,4 +1,4 @@
-# Multi Agent Diffusion-Predictor Reinforcement Learning Framework
+# Hyper Graphical Attention Policy (HGAP) Network
 
 # Python MARL framework
 
